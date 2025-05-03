@@ -3,7 +3,7 @@ from django.http import JsonResponse
 from django.templatetags.static import static
 
 
-from .models import Product
+from .models import Product, Order, OrderItem
 
 
 def banners_list_api(request):
@@ -59,14 +59,24 @@ def product_list_api(request):
 
 
 def register_order(request):
-    # TODO это лишь заглушка
-    if request.method == 'POST':
-        try:
-            order = json.loads(request.body)
-            print('Получены данные заказа:', order)
-            return JsonResponse({'status': 'ok'})
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    else:
-        return JsonResponse({'error': 'Only POST allowed'}, status=405)
-    # return JsonResponse({})
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Только POST'}, status=405)
+    
+    new_order = json.loads(request.body)
+    print('Новый зааказ:', new_order)
+
+    order = Order.objects.create(
+        first_name=new_order['firstname'],
+        last_name=new_order.get('lastname', ''),
+        phone_number=new_order['phonenumber'],
+        address=new_order['address']
+    )
+
+    for item in new_order['products']:
+        product = Product.objects.get(pk=item['product'])
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            quanity=item['quantity'],
+        )
+    return JsonResponse({'status': 'ok'})
