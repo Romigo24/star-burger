@@ -1,15 +1,13 @@
-import json
 from django.http import JsonResponse
 from django.templatetags.static import static
+from .serializers import OrderSerializer
+
+
+from .models import Product, Order, OrderItem
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
-import re
-from .models import Product, Order, OrderItem
-
-
-PHONE_REGEX = r'^\+79\d{9}$'
 
 def banners_list_api(request):
     # FIXME move data to db?
@@ -65,71 +63,27 @@ def product_list_api(request):
 
 @api_view(['POST'])
 def register_order(request):
-    new_order = request.data
-    print('Новый заказ через DRF:', new_order)
+    serializer = OrderSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    products = new_order.get('products')
-
-    if products is None:
-        message = "Обязательное поле."
-    elif not isinstance(products, list):
-        message = "Ожидался list со значениями, но был получен другой тип."
-    elif len(products) == 0:
-        message = "Этот список не может быть пустым."
-    else:
-        message = None
-
-    if message:
-        return Response(
-            {"products": message},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    required_fields = ['firstname', 'lastname', 'phonenumber', 'address']
-    missing_fields = [field for field in required_fields if field not in new_order]
-    if missing_fields:
-        return Response(
-            {field: 'Обязательное поле.' for field in missing_fields},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    errors = {}
-    for field in required_fields:
-        value = new_order.get(field)
-        if value is None or value == '':
-            errors[field] = 'Это поле не может быть пустым.'
-        elif not isinstance(value, str):
-            errors[field] = 'Not a valid string.'
-    if errors:
-        return Response(errors, status=status.HTTP_400_BAD_REQUEST)
-
-    phone = new_order.get('phonenumber')
-    if phone and not re.match(PHONE_REGEX, phone):
-        return Response(
-            {'phonenumber': 'Введён некорректный номер телефона.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    for product_data in products:
-        product_id = product_data.get('product')
-        if not Product.objects.filter(pk=product_id).exists():
-            return Response(
-                {'products': f'Недопустимый первичный ключ "{product_id}"'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    products = serializer.validated_data['products']
+    firstname = serializer.validated_data['firstname']
+    lastname = serializer.validated_data['lastname']
+    phonenumber = serializer.validated_data['phonenumber']
+    address = serializer.validated_data['address']
 
     order = Order.objects.create(
-        first_name=new_order['firstname'],
-        last_name=new_order.get('lastname', ''),
-        phone_number=new_order['phonenumber'],
-        address=new_order['address']
+        firstname=firstname,
+        lastname=lastname,
+        phonenumber=phonenumber,
+        address=address,
     )
 
-    for item in new_order['products']:
-        product = Product.objects.get(pk=item['product'])
+    for product in products:
         OrderItem.objects.create(
             order=order,
-            product=product,
-            quanity=item['quantity'],
+            product_id=product['product'],
+            quantity=product['quantity']
         )
-    return Response({'status': 'ok'})
+    return Response({'message': 'Заказ создан'}, status=status.HTTP_201_CREATED)
