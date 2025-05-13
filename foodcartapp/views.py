@@ -83,7 +83,10 @@ def register_order(request):
     for product in products:
         OrderItem.objects.create(
             order=order,
-            product_id=product['product'],
+            product=product['product'],
             quantity=product['quantity']
         )
-    return Response({'message': 'Заказ создан'}, status=status.HTTP_201_CREATED)
+
+    order_serializer = OrderSerializer(order)
+
+    return Response(order_serializer.data, status=status.HTTP_201_CREATED)
