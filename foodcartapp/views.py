@@ -1,7 +1,8 @@
 import json
 from django.http import JsonResponse
 from django.templatetags.static import static
-
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 
 from .models import Product, Order, OrderItem
 
@@ -58,12 +59,10 @@ def product_list_api(request):
     })
 
 
+@api_view(['POST'])
 def register_order(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Только POST'}, status=405)
-    
-    new_order = json.loads(request.body)
-    print('Новый зааказ:', new_order)
+    new_order = request.data
+    print('Новый заказ через DRF:', new_order)
 
     order = Order.objects.create(
         first_name=new_order['firstname'],
@@ -79,4 +78,4 @@ def register_order(request):
             product=product,
             quanity=item['quantity'],
         )
-    return JsonResponse({'status': 'ok'})
+    return Response({'status': 'ok'})
