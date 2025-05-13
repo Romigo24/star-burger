@@ -5,8 +5,11 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
+import re
 from .models import Product, Order, OrderItem
 
+
+PHONE_REGEX = r'^\+79\d{9}$'
 
 def banners_list_api(request):
     # FIXME move data to db?
@@ -65,7 +68,7 @@ def register_order(request):
     new_order = request.data
     print('Новый заказ через DRF:', new_order)
 
-    products = new_order.get('products', None)
+    products = new_order.get('products')
 
     if products is None:
         message = "Обязательное поле."
@@ -81,6 +84,39 @@ def register_order(request):
             {"products": message},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+    required_fields = ['firstname', 'lastname', 'phonenumber', 'address']
+    missing_fields = [field for field in required_fields if field not in new_order]
+    if missing_fields:
+        return Response(
+            {field: 'Обязательное поле.' for field in missing_fields},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    errors = {}
+    for field in required_fields:
+        value = new_order.get(field)
+        if value is None or value == '':
+            errors[field] = 'Это поле не может быть пустым.'
+        elif not isinstance(value, str):
+            errors[field] = 'Not a valid string.'
+    if errors:
+        return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+    phone = new_order.get('phonenumber')
+    if phone and not re.match(PHONE_REGEX, phone):
+        return Response(
+            {'phonenumber': 'Введён некорректный номер телефона.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    for product_data in products:
+        product_id = product_data.get('product')
+        if not Product.objects.filter(pk=product_id).exists():
+            return Response(
+                {'products': f'Недопустимый первичный ключ "{product_id}"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     order = Order.objects.create(
         first_name=new_order['firstname'],
