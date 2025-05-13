@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.templatetags.static import static
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from rest_framework import status
 
 from .models import Product, Order, OrderItem
 
@@ -63,6 +64,23 @@ def product_list_api(request):
 def register_order(request):
     new_order = request.data
     print('Новый заказ через DRF:', new_order)
+
+    products = new_order.get('products', None)
+
+    if products is None:
+        message = "Обязательное поле."
+    elif not isinstance(products, list):
+        message = "Ожидался list со значениями, но был получен другой тип."
+    elif len(products) == 0:
+        message = "Этот список не может быть пустым."
+    else:
+        message = None
+
+    if message:
+        return Response(
+            {"products": message},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     order = Order.objects.create(
         first_name=new_order['firstname'],
