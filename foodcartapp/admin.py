@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.shortcuts import reverse
 from django.templatetags.static import static
 from django.utils.html import format_html
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.shortcuts import redirect
 
 from .models import Product, Order, OrderItem
 from .models import ProductCategory
@@ -115,6 +117,14 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     inlines = [OrderItemInline, ]
+
+    def response_change(self, request, obj):
+        if '_continue' not in request.POST and '_addanother' not in request.POST:
+            back_url = request.GET.get('back')
+            if back_url and url_has_allowed_host_and_scheme(back_url, allowed_hosts=None):
+                return redirect(back_url)
+
+        return super().response_change(request, obj)
 
 
 @admin.register(OrderItem)
