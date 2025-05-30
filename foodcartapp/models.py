@@ -143,6 +143,12 @@ class Order(models.Model):
         ('delivering', 'В доставке'),
         ('completed', 'Завершён'),
     ]
+
+    PAYMENT_CHOICES = [
+        ('cash', 'Наличностью'),
+        ('card', 'Электронно')
+    ]
+    
     firstname = models.CharField('Имя', max_length=30)
     lastname = models.CharField('Фамилия', max_length=30)
     phonenumber = PhoneNumberField('Номер телефона', db_index=True)
@@ -175,6 +181,14 @@ class Order(models.Model):
         blank=True,
         null=True,
         db_index=True,
+    )
+
+    payment = models.CharField(
+        'Способ оплаты',
+        max_length=20,
+        choices=PAYMENT_CHOICES,
+        default='cash',
+        db_index=True
     )
 
     class Meta:
