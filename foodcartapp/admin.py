@@ -117,6 +117,7 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     inlines = [OrderItemInline, ]
+    list_display = ('created_at', )
 
     def response_change(self, request, obj):
         if '_continue' not in request.POST and '_addanother' not in request.POST:
