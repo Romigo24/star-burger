@@ -1,3 +1,4 @@
+from collections import defaultdict
 from django import forms
 from django.shortcuts import redirect, render
 from django.views import View
@@ -7,8 +8,7 @@ from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth import authenticate, login
 from django.contrib.auth import views as auth_views
 
-
-from foodcartapp.models import Product, Restaurant, Order
+from foodcartapp.models import Product, Restaurant, Order, RestaurantMenuItem
 
 
 class Login(forms.Form):
@@ -92,5 +92,36 @@ def view_restaurants(request):
 
 @user_passes_test(is_manager, login_url='restaurateur:login')
 def view_orders(request):
-    orders = Order.objects.with_total_price().order_by('-id')
-    return render(request, template_name='order_items.html', context={'order_items': orders})
+    orders = (
+        Order.objects
+        .with_total_price()
+        .exclude(status='completed')
+        .prefetch_related('items__product')
+        .select_related('restaurant')
+        .order_by('-id')
+    )
+
+    menu_items = RestaurantMenuItem.objects.filter(availability=True).select_related('restaurant', 'product')
+
+    available_in = defaultdict(set)
+    for item in menu_items:
+        available_in[item.product_id].add(item.restaurant_id)
+
+    restaurants = list(Restaurant.objects.all())
+
+    order_infos = []
+
+    for order in orders:
+        products = [item.product for item in order.items.all()]
+        suitable_restaurants = []
+
+        for restaurant in restaurants:
+            if all(restaurant.id in available_in[product.id] for product in products):
+                suitable_restaurants.append(restaurant)
+
+        order_infos.append({
+            'order': order,
+            'available_restaurants': suitable_restaurants,
+        })
+
+    return render(request, 'order_items.html', {'order_infos': order_infos})

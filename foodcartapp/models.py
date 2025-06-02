@@ -191,9 +191,26 @@ class Order(models.Model):
         db_index=True
     )
 
+    restaurant = models.ForeignKey(
+        Restaurant,
+        verbose_name='Ресторан',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders'
+    )
+
     class Meta:
         verbose_name = 'заказ'
         verbose_name_plural = 'заказы'
+
+    def save(self, *args, **kwargs):
+        if self.restaurant and self.status == 'unprocessed':
+            self.status = 'confirmed'
+            if not self.called_at:
+                self.called_at = timezone.now()
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.firstname} {self.lastname} - {self.address}'
