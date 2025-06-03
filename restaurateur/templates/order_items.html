@@ -38,7 +38,7 @@
       <td>{{ order.comment }}</td>
 
       <td>
-       {% if info.geocode_error %}Add commentMore actions
+       {% if info.geocode_error %}
           Ошибка определения координат
         {% elif info.assigned_restaurant_info %}
           {% with assigned=info.assigned_restaurant_info %}

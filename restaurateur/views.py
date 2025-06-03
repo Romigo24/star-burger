@@ -1,19 +1,20 @@
 from collections import defaultdict
+import logging
+
+from geopy.distance import distance
+from geopy.geocoders import Yandex
+import requests
+
 from django import forms
-from django.shortcuts import redirect, render
-from django.views import View
-from django.urls import reverse_lazy
-from django.contrib.auth.decorators import user_passes_test
 from django.conf import settings
 from django.contrib.auth import authenticate, login
 from django.contrib.auth import views as auth_views
+from django.contrib.auth.decorators import user_passes_test
+from django.shortcuts import redirect, render
+from django.urls import reverse_lazy
+from django.views import View
 
-from foodcartapp.models import Product, Restaurant, Order, RestaurantMenuItem
-
-from geopy.geocoders import Yandex
-from geopy.distance import geodesic
-import requests
-import logging
+from foodcartapp.models import Order, Product, Restaurant, RestaurantMenuItem
 
 
 geolocator = Yandex(api_key=settings.YANDEX_GEOCODER_API_KEY, timeout=10)
@@ -23,23 +24,23 @@ GEOCODER_API_URL = 'https://geocode-maps.yandex.ru/1.x'
 logger = logging.getLogger(__name__)
 
 
-def fetch_coordinates(GEOCODER_API_KEY, address):
+def fetch_coordinates(api_key, address):
+    url = 'https://geocode-maps.yandex.ru/1.x'
+    params = {'apikey': api_key,
+              'geocode': address,
+              'format': 'json'}
     try:
-        response = requests.get(GEOCODER_API_URL, params={
-            'geocode': address,
-            'apikey': GEOCODER_API_KEY,
-            'format': 'json',
-        })
+        response = requests.get(url, params=params)
         response.raise_for_status()
-        found_places = response.json()['response']['GeoObjectCollection']['featureMember']
-        if not found_places:
-            return None
-        most_relevant = found_places[0]
-        lon, lat = map(float, most_relevant['GeoObject']['Point']['pos'].split(" "))
+        geo_data = response.json()
+        coords = geo_data["response"]["GeoObjectCollection"]["featureMember"][0][
+            "GeoObject"
+        ]["Point"]["pos"]
+
+        lon, lat = map(float, coords.split(' '))
         return lat, lon
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Geocoding request failed: {e}")
-        return None
+    except (IndexError, KeyError, ValueError, requests.RequestException):
+        return None, None
 
 
 class Login(forms.Form):
@@ -101,8 +102,12 @@ def view_products(request):
 
     products_with_restaurant_availability = []
     for product in products:
-        availability = {item.restaurant_id: item.availability for item in product.menu_items.all()}
-        ordered_availability = [availability.get(restaurant.id, False) for restaurant in restaurants]
+        availability = {
+            item.restaurant_id: item.availability for item in product.menu_items.all()
+        }
+        ordered_availability = [
+            availability.get(restaurant.id, False) for restaurant in restaurants
+        ]
 
         products_with_restaurant_availability.append(
             (product, ordered_availability)
@@ -129,7 +134,7 @@ def view_orders(request):
         .exclude(status='completed')
         .prefetch_related('items__product')
         .select_related('restaurant')
-        .order_by('-id')
+        .order_by('-status', '-id')
     )
 
     menu_items = RestaurantMenuItem.objects.filter(availability=True).select_related('restaurant', 'product')
@@ -140,44 +145,77 @@ def view_orders(request):
 
     restaurants = list(Restaurant.objects.all())
 
-    restaurant_locations = {}
     for restaurant in restaurants:
-        coords = fetch_coordinates(settings.YANDEX_GEOCODER_API_KEY, restaurant.address)
-        if coords:
-            restaurant_locations[restaurant.id] = coords
+        if not restaurant.lat or not restaurant.lon:
+            lat, lon = fetch_coordinates(
+                settings.YANDEX_GEOCODER_API_KEY, restaurant.address
+            )
+            if lat and lon:
+                restaurant.lat = lat
+                restaurant.lon = lon
+                restaurant.save()
 
     order_infos = []
 
     for order in orders:
         products = [item.product for item in order.items.all()]
+
+        if not order.lat or not order.lon:
+            lat, lon = fetch_coordinates(
+                settings.YANDEX_GEOCODER_API_KEY, order.address
+            )
+            if lat and lon:
+                order.lat = lat
+                order.lon = lon
+                order.save()
+
+        if order.lat and order.lon:
+            order_point = (order.lat, order.lon)
+
         suitable_restaurants = []
+        geocode_error = not (order.lat and order.lon)
 
-        order_coords = fetch_coordinates(settings.YANDEX_GEOCODER_API_KEY, order.address)
+        if not geocode_error:
+            order_point = (order.lat, order.lon)
 
-        if order_coords:
             for restaurant in restaurants:
                 if all(restaurant.id in available_in[product.id] for product in products):
-                    coords = restaurant_locations.get(restaurant.id)
-                    if coords:
-                        distance = geodesic(order_coords, coords).km
-                        suitable_restaurants.append((restaurant, round(distance, 3)))
+                    if restaurant.lat and restaurant.lon:
+                        rest_point = (restaurant.lat, restaurant.lon)
+                        dist_km = distance(order_point, rest_point).km
+                        suitable_restaurants.append((restaurant, round(dist_km, 2)))
+                    else:
+                        geocode_error = True
+
+
+            suitable_restaurants.sort(key=lambda r: r[1])
         else:
-            suitable_restaurants = None
+            suitable_restaurants = [
+                (restaurant, None)
+                for restaurant in restaurants
+                if all(restaurant.id in available_in[product.id] for product in products)
+            ]
 
-        assigned_restaurant_info = None
-        assigned_restaurant = next((r for r in restaurants if r.id == order.restaurant_id), None)
-        if assigned_restaurant:
-            assigned_coords = restaurant_locations.get(order.restaurant_id)
-            if order_coords and assigned_coords:
-                distance = geodesic(order_coords, assigned_coords).km
-                assigned_restaurant_info = (assigned_restaurant, round(distance, 3))
-            else:
-                assigned_restaurant_info = (assigned_restaurant, None)
+        assigned_info = None
+        if (
+            order.restaurant
+            and order.lat
+            and order.lon
+            and order.restaurant.lat
+            and order.restaurant.lon
+        ):
+            rest_point = (order.restaurant.lat, order.restaurant.lon)
+            assigned_distance = distance((order.lat, order.lon), rest_point).km
+            assigned_info = (order.restaurant, round(assigned_distance, 2))
+        elif order.restaurant:
+            assigned_info = (order.restaurant, None)
 
-        order_infos.append({
-            'order': order,
-            'available_restaurants': suitable_restaurants,
-            'assigned_restaurant_info': assigned_restaurant_info,
-        })
-
+        order_infos.append(
+            {
+                "order": order,
+                "available_restaurants": suitable_restaurants,
+                "assigned_restaurant_info": assigned_info,
+                "geocode_error": geocode_error,
+            }
+        )
     return render(request, 'order_items.html', {'order_infos': order_infos})
