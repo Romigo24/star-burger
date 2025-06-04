@@ -65,30 +65,6 @@ def product_list_api(request):
 @api_view(['POST'])
 def register_order(request):
     serializer = OrderSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    products = serializer.validated_data['products']
-    firstname = serializer.validated_data['firstname']
-    lastname = serializer.validated_data['lastname']
-    phonenumber = serializer.validated_data['phonenumber']
-    address = serializer.validated_data['address']
-
-    order = Order.objects.create(
-        firstname=firstname,
-        lastname=lastname,
-        phonenumber=phonenumber,
-        address=address,
-    )
-
-    for product in products:
-        OrderItem.objects.create(
-            order=order,
-            product=product['product'],
-            quantity=product['quantity'],
-            price=product['product'].price
-        )
-
-    order_serializer = OrderSerializer(order)
-
-    return Response(order_serializer.data, status=status.HTTP_201_CREATED)
+    serializer.is_valid(raise_exception=True)
+    order = serializer.save()
+    return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
