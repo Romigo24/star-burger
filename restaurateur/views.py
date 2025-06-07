@@ -2,8 +2,6 @@ from collections import defaultdict
 import logging
 
 from geopy.distance import distance
-from geopy.geocoders import Yandex
-import requests
 
 from django import forms
 from django.conf import settings
@@ -17,30 +15,7 @@ from django.views import View
 from foodcartapp.models import Order, Product, Restaurant, RestaurantMenuItem
 
 
-geolocator = Yandex(api_key=settings.YANDEX_GEOCODER_API_KEY, timeout=10)
-GEOCODER_API_KEY = settings.YANDEX_GEOCODER_API_KEY
-GEOCODER_API_URL = 'https://geocode-maps.yandex.ru/1.x'
-
 logger = logging.getLogger(__name__)
-
-
-def fetch_coordinates(api_key, address):
-    url = 'https://geocode-maps.yandex.ru/1.x'
-    params = {'apikey': api_key,
-              'geocode': address,
-              'format': 'json'}
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        geo_data = response.json()
-        coords = geo_data["response"]["GeoObjectCollection"]["featureMember"][0][
-            "GeoObject"
-        ]["Point"]["pos"]
-
-        lon, lat = map(float, coords.split(' '))
-        return lat, lon
-    except (IndexError, KeyError, ValueError, requests.RequestException):
-        return None, None
 
 
 class Login(forms.Form):
@@ -153,12 +128,7 @@ def view_orders(request):
         if restaurant.location.lat and restaurant.location.lon:
             restaurant_coords[restaurant.id] = (restaurant.location.lat, restaurant.location.lon)
         else:
-            lat, lon = fetch_coordinates(settings.YANDEX_GEOCODER_API_KEY, restaurant.location.address)
-            if lat and lon:
-                restaurant.location.lat = lat
-                restaurant.location.lon = lon
-                restaurant_coords[restaurant.id] = (lat, lon)
-                restaurants_to_update.append(restaurant.location)
+            restaurant_coords[restaurant.id] = (None, None)
 
     if restaurants_to_update:
         Restaurant.objects.bulk_update(restaurants_to_update, ['location'])
@@ -167,15 +137,10 @@ def view_orders(request):
     order_coords = {}
 
     for order in orders:
-        if order.location and order.location.lat and order.location.lon:
-            order_coords[order.id] = (order.location.lat, order.location.lon)
-        else:
-            lat, lon = fetch_coordinates(settings.YANDEX_GEOCODER_API_KEY, order.location.address)
-            if lat and lon:
-                order.location.lat = lat
-                order.location.lon = lon
-                order_coords[order.id] = (lat, lon)
-                orders_to_update.append(order.location)
+            if order.location.lat and order.location.lon:
+                order_coords[order.id] = (order.location.lat, order.location.lon)
+            else:
+                order_coords[order.id] = (None, None)
 
     if orders_to_update:
         Order.objects.bulk_update(orders_to_update, ['location'])

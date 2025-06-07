@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.templatetags.static import static
 from django.db import transaction
 from .serializers import OrderSerializer
+import logging
 
 
 from .models import Product, Order, OrderItem
@@ -9,6 +10,9 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
+from .utils import create_or_update_location
+
+logger = logging.getLogger(__name__)
 
 def banners_list_api(request):
     # FIXME move data to db?
@@ -64,7 +68,34 @@ def product_list_api(request):
 @transaction.atomic
 @api_view(['POST'])
 def register_order(request):
-    serializer = OrderSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    order = serializer.save()
-    return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+    try:
+        serializer = OrderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        address = request.data.get('address')
+        if not address:
+            return Response(
+                {'error': 'Address is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order = serializer.save()
+
+        location = create_or_update_location(address)
+        if not location:
+            logger.error(f"Failed to create location for order {order.id}")
+
+        order.location = location
+        order.save(update_fields=['location'])
+
+        return Response(
+            OrderSerializer(order).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    except Exception as e:
+        logger.error(f"Error creating order: {str(e)}")
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
