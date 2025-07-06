@@ -90,7 +90,9 @@ MEDIA_URL = '/media/'
 
 DATABASES = {
     'default': dj_database_url.config(
-        default='sqlite:////{0}'.format(os.path.join(BASE_DIR, 'db.sqlite3'))
+        default=env.str('DATABASE_URL'),
+        conn_max_age=600,
+        conn_health_checks=True,
     )
 }
 
@@ -140,3 +142,5 @@ ROLLBAR = {
 }
 
 rollbar.init(**ROLLBAR)
+
+SILENCED_SYSTEM_CHECKS = ['urls.W005']
