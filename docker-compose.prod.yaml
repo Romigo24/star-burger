@@ -1,0 +1,35 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - /var/www/media:/app/media
+      - /var/www/frontend:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      - frontend
+      - db
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - /var/www/frontend:/app/bundles
+    restart: unless-stopped
+
+  db:
+    image: postgres:13
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  db_data:

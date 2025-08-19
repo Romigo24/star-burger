@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "build": "parcel build bundles-src/index.js --dist-dir bundles --public-url='./'",
+    "postbuild": "cp -r assets/* bundles/"
+  },
   "dependencies": {
     "@babel/plugin-proposal-class-properties": "^7.16.7",
     "@babel/preset-react": "^7.16.7",

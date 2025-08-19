@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/app
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
+      - ./frontend/bundles:/app/bundles
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - frontend
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app
+      - ./frontend/bundles:/app/bundles
+    ports:
+      - "3000:3000"
+
+  db:
+    image: postgres:13
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+
+volumes:
+  db_data:

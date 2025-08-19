@@ -11,12 +11,21 @@ env = Env()
 env.read_env()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+STATIC_URL = '/static/'
+MEDIA_URL = '/media/'
 
 
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env.bool('DEBUG', True)
 YANDEX_GEOCODER_API_KEY = os.getenv('YANDEX_GEOCODER_API_KEY')
+
+if DEBUG:
+    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+else:
+    STATIC_ROOT = '/app/staticfiles'
+    MEDIA_ROOT = '/app/media'
 
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', ['127.0.0.1', 'localhost'])
@@ -85,8 +94,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'star_burger.wsgi.application'
 
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-MEDIA_URL = '/media/'
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -121,7 +128,6 @@ USE_L10N = True
 
 USE_TZ = True
 
-STATIC_URL = '/static/'
 
 INTERNAL_IPS = [
     '127.0.0.1'
