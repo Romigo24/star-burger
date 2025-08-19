@@ -70,7 +70,7 @@ server {
 
 1. Клонируйте репозиторий и перейдите в папку проекта:
    ```sh
-   git clone https://github.com/yelena0000/star-burger.git
+   git clone https://github.com/Romigo24/star-burger.git
    cd star-burger
    ```
 2. Создайте файл `.env` в папке backend/ со следующим содержимым:
